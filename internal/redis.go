@@ -32,15 +32,15 @@ func (b *Broker) publish(ctx context.Context, env Envelope) error {
 	if err != nil {
 		return err
 	}
-	return b.rdb.Publish(ctx, "room:"+env.RoomID, payload).Err()
+	return b.rdb.Publish(ctx, env.Target(), payload).Err()
 }
 
-func (b *Broker) subscribe(ctx context.Context, roomID string) error {
-	return b.pubsub.Subscribe(ctx, "room:"+roomID)
+func (b *Broker) subscribe(ctx context.Context, channel string) error {
+	return b.pubsub.Subscribe(ctx, channel)
 }
 
-func (b *Broker) unsubscribe(ctx context.Context, roomID string) error {
-	return b.pubsub.Unsubscribe(ctx, "room:"+roomID)
+func (b *Broker) unsubscribe(ctx context.Context, channel string) error {
+	return b.pubsub.Unsubscribe(ctx, channel)
 }
 
 // redis handover msgs to hub for local delivery
@@ -55,6 +55,6 @@ func (b *Broker) Run() {
 			continue
 		}
 
-		b.hub.deliverLocal <- env
+		b.hub.deliverLocal <- redisMsg{env.Target(),env}
 	}
 }

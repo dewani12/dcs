@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"strings"
 )
 
 type joinReq struct {
@@ -11,14 +12,20 @@ type joinReq struct {
 	roomID string
 }
 
+type redisMsg struct{
+	channel string
+	env     Envelope
+}
+
 // who's connected - single source of truth
 type Hub struct {
 	clients      map[*Client]bool
 	rooms        map[string]map[*Client]bool
+	users 		 map[string]map[*Client]bool
 	register     chan *Client
 	unregister   chan *Client
 	broadcast    chan Envelope
-	deliverLocal chan Envelope
+	deliverLocal chan redisMsg
 	join         chan joinReq
 	leave        chan joinReq
 	broker       *Broker
@@ -32,8 +39,9 @@ func NewHub() *Hub {
 	return &Hub{
 		clients:      make(map[*Client]bool),
 		rooms:        make(map[string]map[*Client]bool),
+		users:        make(map[string]map[*Client]bool),
 		broadcast:    make(chan Envelope),
-		deliverLocal: make(chan Envelope),
+		deliverLocal: make(chan redisMsg),
 		register:     make(chan *Client),
 		unregister:   make(chan *Client),
 		join:         make(chan joinReq),
@@ -48,6 +56,16 @@ func (h *Hub) Run() {
 		case c := <-h.register:
 			h.clients[c] = true
 
+			if h.users[c.userID] ==nil{
+				h.users[c.userID]=make(map[*Client]bool)
+
+				if err := h.broker.subscribe(ctx, "user:"+c.userID); err != nil {
+					log.Println("subscribe user error:", err)
+				}
+			}
+
+			h.users[c.userID][c]=true
+
 		case c := <-h.unregister:
 			if _, ok := h.clients[c]; ok {
 				delete(h.clients, c)
@@ -58,9 +76,21 @@ func (h *Hub) Run() {
 						delete(clients, c)
 						if len(clients) == 0 {
 							delete(h.rooms, roomID)
-							if err := h.broker.unsubscribe(ctx, roomID); err != nil {
-								log.Println("unsubscribe error:", err)
+							if err := h.broker.unsubscribe(ctx, "room:"+roomID); err != nil {
+								log.Println("unsubscribe room error:", err)
 							}
+						}
+					}
+				}
+				//remove client from users map
+				if clients,ok:=h.users[c.userID];ok{
+					delete(clients,c)
+
+					if len(clients)==0{
+						delete(h.users,c.userID)
+
+						if err := h.broker.unsubscribe(ctx, "user:"+c.userID); err != nil {
+							log.Println("unsubscribe user error",err)
 						}
 					}
 				}
@@ -72,8 +102,8 @@ func (h *Hub) Run() {
 			if h.rooms[req.roomID] == nil {
 				h.rooms[req.roomID] = make(map[*Client]bool)
 
-				if err := h.broker.subscribe(ctx, req.roomID); err != nil {
-					log.Println("subscribe error: ", err)
+				if err := h.broker.subscribe(ctx, "room:"+req.roomID); err != nil {
+					log.Println("subscribe room error: ", err)
 				}
 			}
 			h.rooms[req.roomID][req.client] = true
@@ -95,19 +125,27 @@ func (h *Hub) Run() {
 				log.Println("publish error: ", err)
 			}
 
-		case env := <-h.deliverLocal:
-			payload, err := json.Marshal(env)
+		case rm := <-h.deliverLocal:
+			payload, err := json.Marshal(rm.env)
 			if err != nil {
 				continue
 			}
-			for c := range h.rooms[env.RoomID] {
-				select {
-				case c.send <- payload:
-				//dead connection
+			
+			var rcp map[*Client]bool
+			switch {
+			case strings.HasPrefix(rm.channel, "room:"):
+				rcp = h.rooms[strings.TrimPrefix(rm.channel, "room:")]
+			case strings.HasPrefix(rm.channel, "user:"):
+				rcp = h.users[strings.TrimPrefix(rm.channel, "user:")]
+			}
+
+			for c:=range rcp{
+				select{
+				case c.send<-payload:
 				default:
 					close(c.send)
-					delete(h.clients, c)
-					delete(h.rooms[env.RoomID], c)
+					delete(h.clients,c)
+					delete(rcp,c)	
 				}
 			}
 		}

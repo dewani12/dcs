@@ -14,17 +14,20 @@ var upgrader = websocket.Upgrader{
 }
 
 func ServeWS(hub *Hub,w http.ResponseWriter,r *http.Request){
+	userID:=r.URL.Query().Get("user")
+
 	conn,err:=upgrader.Upgrade(w,r,nil)
 	if err!=nil{
 		log.Println("upgrade error:", err)
 		return
 	}
-	log.Println("client connected")
+	log.Println("client connected:",userID)
 
 	client:=&Client{
 		hub:hub,
 		conn:conn,
 		send: make(chan []byte,256),
+		userID: userID,
 	}
 
 	hub.register<-client

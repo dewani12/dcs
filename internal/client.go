@@ -19,6 +19,7 @@ type Client struct {
 	conn *websocket.Conn
 	//buffered channel for outbound msgs
 	send chan []byte
+	userID string 
 }
 
 func (c *Client) readPump() {
