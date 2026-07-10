@@ -29,10 +29,14 @@ type Hub struct {
 	join         chan joinReq
 	leave        chan joinReq
 	broker       *Broker
+	writer 		 *Writer
 }
 
 func (h *Hub)SetBroker(b *Broker){
 	h.broker=b
+}
+func (h *Hub) SetWriter(w *Writer) {
+    h.writer=w
 }
 
 func NewHub() *Hub {
@@ -114,13 +118,14 @@ func (h *Hub) Run() {
 				if len(clients) == 0 {
 					delete(h.rooms, req.roomID)
 
-					if err := h.broker.unsubscribe(ctx, req.roomID); err != nil {
+					if err := h.broker.unsubscribe(ctx, "room:"+req.roomID); err != nil {
 						log.Println("unsubscribe error:", err)
 					}
 				}
 			}
 
 		case env := <-h.broadcast:
+			h.writer.enqueue(env)
 			if err := h.broker.publish(ctx, env); err != nil {
 				log.Println("publish error: ", err)
 			}
