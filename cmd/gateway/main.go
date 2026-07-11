@@ -34,6 +34,11 @@ func main(){
 	http.HandleFunc("/ws",func(w http.ResponseWriter, r *http.Request) {
 		dcs.ServeWS(hub, w, r)
 	})
+
+	http.HandleFunc("/presence",func(w http.ResponseWriter, r *http.Request) {
+		dcs.ServePresence(b, w, r)
+	})
+	
 	log.Println("listening on port",*addr)
 	log.Fatal(http.ListenAndServe(*addr,nil))
 }

@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
+var ttl = 30*time.Second
+
 // node connection to redis
 type Broker struct {
-	rdb    *redis.Client
+	rdb    *redis.Client //used for both pubsub and kv(presence)
 	pubsub *redis.PubSub
 	hub    *Hub
 }
@@ -27,6 +30,7 @@ func NewBroker(addr string, hub *Hub) *Broker {
 	}
 }
 
+//delivery of message accross nodes
 func (b *Broker) publish(ctx context.Context, env Envelope) error {
 	payload, err := json.Marshal(env)
 	if err != nil {
@@ -58,3 +62,23 @@ func (b *Broker) Run() {
 		b.hub.deliverLocal <- redisMsg{env.Target(),env}
 	}
 }
+
+//presence kv for nodes
+func (b *Broker)markOnline(ctx context.Context,userID,node string)error{
+	return b.rdb.Set(ctx,"presence:"+userID,node,ttl).Err()
+}
+
+func (b *Broker)isOnline(ctx context.Context,userID string)(bool,string,error){
+	node,err:=b.rdb.Get(ctx,"presence:"+userID).Result()
+	if err==redis.Nil{
+		return false,"",nil
+	}
+	if err!=nil{
+		return false,"",err
+	}
+	return true,node,nil
+}
+
+// func (b *Broker)clearOnline(ctx context.Context,userID string)error{
+// 	return b.rdb.Del(ctx,"presence:"+userID).Err()
+// }

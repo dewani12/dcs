@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log"
 	"strings"
+	"time"
 )
 
 type joinReq struct {
@@ -17,11 +18,16 @@ type redisMsg struct{
 	env     Envelope
 }
 
+type isLocalReq struct{
+	reply 	chan bool
+	userID 	string
+}
+
 // who's connected - single source of truth
 type Hub struct {
 	clients      map[*Client]bool
 	rooms        map[string]map[*Client]bool
-	users 		 map[string]map[*Client]bool
+	users 		 map[string]map[*Client]bool //userID: [ws conn of all devices]
 	register     chan *Client
 	unregister   chan *Client
 	broadcast    chan Envelope
@@ -30,6 +36,7 @@ type Hub struct {
 	leave        chan joinReq
 	broker       *Broker
 	writer 		 *Writer
+	isLocal      chan isLocalReq
 }
 
 func (h *Hub)SetBroker(b *Broker){
@@ -50,6 +57,29 @@ func NewHub() *Hub {
 		unregister:   make(chan *Client),
 		join:         make(chan joinReq),
 		leave:        make(chan joinReq),
+		isLocal:	  make(chan isLocalReq),	
+	}
+}
+
+func(h *Hub)heartbeat(userID string){
+	t:=time.NewTicker(15*time.Second)
+	defer t.Stop()
+
+	for range t.C{
+		//stop heartbeat, if last local device left
+		reply :=make(chan bool)
+		req:=isLocalReq{reply:reply,userID:userID}
+		h.isLocal<-req
+
+		ans:=<-reply
+
+		if !ans{
+			return
+		}
+
+		if err:=h.broker.markOnline(context.Background(),userID,"dummy");err!=nil{
+			log.Println("heartbeat error:",err)
+		}
 	}
 }
 
@@ -66,6 +96,12 @@ func (h *Hub) Run() {
 				if err := h.broker.subscribe(ctx, "user:"+c.userID); err != nil {
 					log.Println("subscribe user error:", err)
 				}
+
+				if err:=h.broker.markOnline(ctx,"user:"+c.userID,"dummy");err!=nil{
+					log.Println("mark online error:",err)
+				}
+
+				go h.heartbeat(c.userID)
 			}
 
 			h.users[c.userID][c]=true
@@ -153,6 +189,10 @@ func (h *Hub) Run() {
 					delete(rcp,c)	
 				}
 			}
+
+		case req:=<-h.isLocal:
+			d,ok:=h.users[req.userID]
+			req.reply<-ok && len(d)>0
 		}
 	}
 }

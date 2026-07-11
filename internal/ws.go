@@ -1,8 +1,11 @@
 package dcs
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"fmt"
+
 	"github.com/gorilla/websocket"
 )
 
@@ -34,4 +37,16 @@ func ServeWS(hub *Hub,w http.ResponseWriter,r *http.Request){
 
 	go client.writePump()
 	go client.readPump()
+}
+
+func ServePresence(b *Broker,w http.ResponseWriter, r *http.Request){
+	userId:=r.URL.Query().Get("user")
+	online,node,err:=b.isOnline(context.Background(),userId);
+
+	if err!=nil{
+		http.Error(w,"error",http.StatusInternalServerError)
+		return
+	}	
+		
+	fmt.Fprintf(w, `{"user":%q,"online":%v,"node":%q}`, userId, online, node)
 }
