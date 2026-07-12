@@ -2,7 +2,7 @@
 
 DCS is an event-driven, horizontally-scalable real-time chat server written in Go. It supports 1:1 direct messages and group chat rooms, fans out messages across multiple server instances using Redis pub/sub, persists messages to PostgreSQL, and tracks user presence.
 
-![ss](https://github-production-user-asset-6210df.s3.amazonaws.com/145996845/620524239-fcef44f9-56cb-4a29-a86d-1e7d94a5f376.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAVCODYLSA53PQK4ZA%2F20260712%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20260712T075922Z&X-Amz-Expires=300&X-Amz-Signature=1b9d7c935058a261811969533611534857c40a75e56be86a5bc62515ffb8e658&X-Amz-SignedHeaders=host&response-content-type=image%2Fpng)
+![architecture](./archi.png)
 
 ## Quickstart (dev)
 
