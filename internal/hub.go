@@ -162,9 +162,7 @@ func (h *Hub) Run() {
 
 		case env := <-h.broadcast:
 			h.writer.enqueue(env)
-			if err := h.broker.publish(ctx, env); err != nil {
-				log.Println("publish error: ", err)
-			}
+			h.broker.publish(env)
 
 		case rm := <-h.deliverLocal:
 			payload, err := json.Marshal(rm.env)

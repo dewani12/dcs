@@ -11,11 +11,17 @@ import (
 
 var ttl = 30*time.Second
 
+const (
+	publishQueueSize=4096
+	publishWorkers=4
+)
+
 // node connection to redis
 type Broker struct {
 	rdb    *redis.Client //used for both pubsub and kv(presence)
 	pubsub *redis.PubSub
 	hub    *Hub
+	publishQueue chan Envelope
 }
 
 func NewBroker(addr string, hub *Hub) *Broker {
@@ -23,20 +29,42 @@ func NewBroker(addr string, hub *Hub) *Broker {
 	//dynamically subscribes to channel
 	ps := rdb.Subscribe(context.Background())
 
-	return &Broker{
+	b:= &Broker{
 		rdb:    rdb,
 		pubsub: ps,
 		hub:    hub,
+		publishQueue: make(chan Envelope,publishQueueSize),
+	}
+
+	for i := 0; i < publishWorkers; i++ {
+		go b.publishWorker()
+	}
+
+	return b
+}
+
+// runs on its own goroutine
+func (b *Broker) publishWorker() {
+	ctx := context.Background()
+	for env := range b.publishQueue {
+		payload, err := json.Marshal(env)
+		if err != nil {
+			log.Println("marshal error before publish:", err)
+			continue
+		}
+		if err := b.rdb.Publish(ctx, env.Target(), payload).Err(); err != nil {
+			log.Println("redis publish error:", err)
+		}
 	}
 }
 
-//delivery of message accross nodes
-func (b *Broker) publish(ctx context.Context, env Envelope) error {
-	payload, err := json.Marshal(env)
-	if err != nil {
-		return err
+//non blocking enqueue
+func (b *Broker) publish(env Envelope) {
+	select{
+	case b.publishQueue<-env:
+	default:
+		log.Println("publish queue full, dropping redis fanout for:", env.Target())
 	}
-	return b.rdb.Publish(ctx, env.Target(), payload).Err()
 }
 
 func (b *Broker) subscribe(ctx context.Context, channel string) error {

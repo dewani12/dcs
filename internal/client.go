@@ -42,7 +42,7 @@ func (c *Client) readPump() {
 			break
 		}
 
-		log.Println("RAW: ", string(raw))
+		// log.Println("RAW: ", string(raw))
 
 		var env Envelope
 		if err := json.Unmarshal(raw, &env); err != nil {
@@ -71,6 +71,8 @@ func (c *Client) writePump() {
 		select {
 		case msg, ok := <-c.send:
 			if !ok {
+				// adding write deadline for message not just ping 
+				c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}

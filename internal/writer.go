@@ -8,17 +8,26 @@ import (
 	"log"
 )
 
+const (
+	writerQueueSize = 1000
+	writerWorkers  = 4
+)
+
 type Writer struct{
 	queue chan Envelope
 	pg *Postgres
 }
 
-func NewWriter(pg *Postgres,queueSize int)*Writer{
+func NewWriter(pg *Postgres)*Writer{
 	w:=&Writer{
-		queue:make(chan Envelope,queueSize),
+		queue:make(chan Envelope,writerQueueSize),
 		pg:pg,
 	}
-	go w.worker() //can be multiple
+	// go w.worker() //can be multiple
+
+	for i := 0; i < writerWorkers; i++ {
+		go w.worker()
+	}
 	return w
 }
 

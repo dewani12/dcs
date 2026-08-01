@@ -20,7 +20,7 @@ func main(){
 		log.Fatal("pg connect:",err)
 	}
 
-	wr:=dcs.NewWriter(pg,1000)
+	wr:=dcs.NewWriter(pg)
 
 	hub:=dcs.NewHub()
 	b:= dcs.NewBroker(*redisAddr,hub)
