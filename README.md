@@ -31,8 +31,6 @@ The gateway accepts the following flags (see `cmd/gateway/main.go`):
 - `-redis` : Redis address for pub/sub (default `localhost:6379`)
 - `-pg` : Postgres connection URL (default `postgres://admin:admin@localhost:5432/dcs`)
 
----
-
 ## API
 
 WebSocket endpoint:
@@ -83,7 +81,6 @@ Message format for join and leave group chat room(JSON):
     "room_id": "photon"
 }
 ```
----
 
 ## Database
 
